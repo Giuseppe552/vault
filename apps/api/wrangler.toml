@@ -1,0 +1,17 @@
+name = "vault-api"
+main = "src/index.ts"
+compatibility_date = "2026-03-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_ORIGIN = "https://vault.giuseppegiona.com"
+MAX_FILE_SIZE = "104857600"  # 100MB
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "vault-blobs"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vault-meta"
+database_id = "placeholder"

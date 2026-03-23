@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vault — encrypted document exchange</title>
+  <meta name="description" content="Share sensitive documents with client-side AES-256-GCM encryption. The server never sees your files. No accounts, no tracking." />
+  <meta name="theme-color" content="#0a0e16" />
+  <meta name="robots" content="index,follow" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="container">
+
+    <!-- ── Brand ── -->
+    <div class="brand-row">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+      </div>
+      <div class="brand-name">vault</div>
+    </div>
+    <div class="tagline">Encrypted document exchange. Files never leave your browser unencrypted.</div>
+    <div class="spec-badge">
+      <span class="spec-badge-dot"></span>
+      AES-256-GCM &middot; Client-side encryption &middot; Zero-knowledge server
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  UPLOAD MODE                                                    -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="upload-view">
+      <div class="card">
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+          </div>
+          <div class="dropzone-label">Drop a file here, or click to browse</div>
+          <div class="dropzone-hint"><strong>Encrypted in your browser</strong> before upload. Max 100MB.</div>
+          <input type="file" id="file-input" />
+        </div>
+
+        <!-- File info (shown after selection) -->
+        <div id="file-info" class="file-info hidden">
+          <div class="file-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+          </div>
+          <div class="file-meta">
+            <div class="file-name" id="file-name"></div>
+            <div class="file-size" id="file-size"></div>
+          </div>
+        </div>
+
+        <!-- Options -->
+        <div class="options-section">
+          <div class="options-grid">
+            <div>
+              <label for="expiry">Expires after</label>
+              <select id="expiry">
+                <option value="1">1 hour</option>
+                <option value="24" selected>24 hours</option>
+                <option value="168">7 days</option>
+              </select>
+            </div>
+            <div>
+              <label for="downloads">Downloads</label>
+              <select id="downloads">
+                <option value="1" selected>1 (one-time)</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+              </select>
+            </div>
+          </div>
+          <div class="option-row">
+            <label for="password">Password (optional)</label>
+            <input type="password" id="password" placeholder="Leave empty for no password" autocomplete="off" />
+          </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-line" id="summary-line">
+          AES-256-GCM &middot; 24h expiry &middot; 1 download &middot; no password
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="encrypt-btn" disabled>
+            Encrypt &amp; upload
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-card" class="card hidden">
+        <div class="progress-label" id="progress-label">Encrypting...</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div id="result-card" class="card hidden">
+        <div class="result-header">
+          <div class="result-check">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+          </div>
+          <div class="result-title">Encrypted and uploaded</div>
+        </div>
+        <div class="link-display" id="share-link"></div>
+        <div class="btn-row">
+          <button class="btn btn-copy" id="copy-btn">Copy link</button>
+        </div>
+        <div class="warning-box">
+          <div class="warning-icon">
+            <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+          </div>
+          <div class="warning-text">
+            This link contains the encryption key. Anyone with this link can download and decrypt the file. Share it carefully — treat it like a password.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  DOWNLOAD MODE                                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="download-view" class="hidden">
+      <div class="card">
+
+        <!-- Loading state (while fetching metadata) -->
+        <div id="dl-loading" class="loading-state">
+          <div class="spinner"></div>
+          <div class="loading-text">Loading file info...</div>
+        </div>
+
+        <!-- File info (after metadata loaded) -->
+        <div id="dl-header" class="dl-header hidden">
+          <div class="dl-icon">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+          </div>
+          <div class="dl-title">Encrypted file</div>
+          <div class="dl-subtitle">This file was shared with you via vault.</div>
+          <div class="dl-meta">
+            <div class="dl-meta-item" id="dl-size"></div>
+            <div class="dl-meta-item" id="dl-remaining"></div>
+          </div>
+        </div>
+
+        <!-- Password prompt -->
+        <div id="password-prompt" class="hidden">
+          <label for="dl-password">Password required</label>
+          <input type="password" id="dl-password" placeholder="Enter the password" autocomplete="off" />
+          <div class="btn-row">
+            <button class="btn btn-primary" id="verify-btn">Unlock &amp; download</button>
+          </div>
+        </div>
+
+        <!-- Download button (no password) -->
+        <div id="download-action" class="hidden btn-row">
+          <button class="btn btn-primary" id="download-btn">Download &amp; decrypt</button>
+        </div>
+
+        <!-- Download progress -->
+        <div id="dl-progress" class="hidden">
+          <div class="progress-label" id="dl-progress-label">Downloading...</div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="dl-progress-fill" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Complete -->
+        <div id="dl-complete" class="complete-state hidden">
+          <div class="complete-icon">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+          </div>
+          <div class="complete-title">Decrypted and downloaded</div>
+          <div class="complete-detail">The encrypted copy has been deleted from the server.</div>
+        </div>
+
+        <!-- Error -->
+        <div id="dl-error" class="error-state hidden">
+          <div class="error-title" id="dl-error-text"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  EXPIRED / NOT FOUND                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="expired-view" class="hidden">
+      <div class="card">
+        <div class="dl-header">
+          <div class="expired-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+          </div>
+          <div class="dl-title">Not available</div>
+          <div class="dl-subtitle">This file has expired, already been downloaded, or doesn't exist.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <div class="footer">
+      <div>Open source &middot; <a href="https://github.com/Giuseppe552/vault">Source code</a> &middot; <a href="https://giuseppegiona.com/projects/vault">How it works</a></div>
+      <div>The server never sees your encryption key or file contents.</div>
+    </div>
+
+  </div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

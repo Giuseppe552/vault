@@ -1,0 +1,17 @@
+{
+  "name": "vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Encrypted document exchange. AES-256-GCM, client-side encryption, zero-knowledge server.",
+  "license": "MIT",
+  "author": "Giuseppe Giona",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "build": "npm run build -w @vault/web && npm run build -w @vault/api",
+    "test": "npm run test -w @vault/web && npm run test -w @vault/api",
+    "lint": "npm run lint -w @vault/web && npm run lint -w @vault/api"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

@@ -1,5 +1,10 @@
 # vault
 
+[![CI](https://github.com/Giuseppe552/vault/actions/workflows/ci.yml/badge.svg)](https://github.com/Giuseppe552/vault/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-23_passing-brightgreen)](https://github.com/Giuseppe552/vault)
+[![Crypto deps](https://img.shields.io/badge/crypto_deps-0-blue)](https://github.com/Giuseppe552/vault)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+
 Encrypted document exchange. Files are encrypted in your browser with AES-256-GCM before they leave your device. The server stores only ciphertext. The decryption key exists only in the URL you share.
 
 ## How it works

@@ -1,4 +1,4 @@
-import { decrypt, base64urlDecode, base64urlEncode, wipe } from "./crypto.js";
+import { decrypt, contentHash, encodeAAD, hashPasswordWithSalt, base64urlDecode, base64urlEncode, wipe } from "./crypto.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -6,8 +6,12 @@ export type BlobMeta = {
   filename_enc: string;
   size_bytes: number;
   has_password: boolean;
+  password_salt?: string;
   downloads_remaining: number;
   expires_at: number;
+  expiry_hours?: number;
+  max_downloads?: number;
+  content_hash?: string;
 };
 
 export type DownloadCallbacks = {
@@ -56,14 +60,16 @@ export async function fetchMeta(blobId: string): Promise<BlobMeta | null> {
   return res.json() as Promise<BlobMeta>;
 }
 
-/** Verify a password against the server. */
+/** Verify a password against the server using PBKDF2 hash. */
 export async function verifyPassword(
   blobId: string,
   password: string,
+  saltB64: string,
 ): Promise<boolean> {
-  const pwBytes = new TextEncoder().encode(password);
-  const hashBuf = await crypto.subtle.digest("SHA-256", pwBytes);
-  const passwordHash = base64urlEncode(new Uint8Array(hashBuf));
+  // Re-derive the PBKDF2 hash client-side with the stored salt
+  const salt = base64urlDecode(saltB64);
+  const hash = await hashPasswordWithSalt(password, salt);
+  const passwordHash = base64urlEncode(hash);
 
   const res = await fetch(`${API_BASE}/api/blob/${blobId}/verify`, {
     method: "POST",
@@ -95,15 +101,36 @@ export async function downloadAndDecrypt(
   const encrypted = await res.arrayBuffer();
   onProgress("Decrypting...", 50);
 
+  // Reconstruct AAD from metadata (must match what was used during encryption)
+  // AAD is only present in v2 uploads — v1 files have no AAD
+  const hasAAD = meta.expiry_hours !== undefined && meta.max_downloads !== undefined;
+  const aad = hasAAD
+    ? encodeAAD({ expiry_hours: meta.expiry_hours!, max_downloads: meta.max_downloads! })
+    : undefined;
+
   // Decrypt the blob
-  const plaintext = await decrypt(encrypted, key);
+  const plaintext = await decrypt(encrypted, key, aad);
+  onProgress("Verifying integrity...", 75);
+
+  // Verify content hash if available
+  if (meta.content_hash) {
+    const hash = base64urlEncode(await contentHash(plaintext));
+    if (hash !== meta.content_hash) {
+      throw new Error("Content hash mismatch — file may be corrupted.");
+    }
+  }
+
   onProgress("Decryption complete.", 80);
 
   // Decrypt the filename
   let filename = "download";
   try {
     const filenameEnc = base64urlDecode(meta.filename_enc);
-    const filenameBytes = await decrypt(filenameEnc.buffer.slice(filenameEnc.byteOffset, filenameEnc.byteOffset + filenameEnc.byteLength) as ArrayBuffer, key);
+    const buf = filenameEnc.buffer.slice(
+      filenameEnc.byteOffset,
+      filenameEnc.byteOffset + filenameEnc.byteLength,
+    ) as ArrayBuffer;
+    const filenameBytes = await decrypt(buf, key);
     filename = new TextDecoder().decode(filenameBytes);
   } catch {
     // Filename decryption failed — use default

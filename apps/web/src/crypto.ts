@@ -267,7 +267,7 @@ export async function verifyPasswordHash(
   return diff === 0;
 }
 
-async function hashPasswordWithSalt(
+export async function hashPasswordWithSalt(
   password: string,
   salt: Uint8Array,
 ): Promise<Uint8Array> {

@@ -197,7 +197,7 @@ async function initDownload(blobId: string, key: Uint8Array) {
         verifyBtn.disabled = true;
 
         try {
-          const valid = await verifyPassword(blobId, pw);
+          const valid = await verifyPassword(blobId, pw, meta.password_salt ?? "");
           if (!valid) {
             dlPasswordInput.value = "";
             dlPasswordInput.placeholder = "Wrong password. Try again.";

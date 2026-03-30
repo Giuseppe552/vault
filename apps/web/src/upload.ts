@@ -1,4 +1,4 @@
-import { generateKey, encrypt, base64urlEncode, wipe } from "./crypto.js";
+import { generateKey, encrypt, hashPassword, contentHash, encodeAAD, base64urlEncode, wipe } from "./crypto.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -26,25 +26,35 @@ export async function uploadFile(opts: UploadOptions): Promise<UploadResult> {
   onProgress("Generating encryption key...", 5);
   const rawKey = generateKey();
 
-  // Step 2: Encrypt file
-  onProgress("Encrypting in your browser...", 10);
+  // Step 2: Read plaintext and compute content hash for integrity verification
+  onProgress("Reading file...", 8);
   const plaintext = await file.arrayBuffer();
-  const encrypted = await encrypt(plaintext, rawKey);
+  const fileHash = base64urlEncode(await contentHash(plaintext));
+
+  // Step 3: Encrypt file with AAD binding (metadata bound to auth tag)
+  onProgress("Encrypting in your browser...", 10);
+  const aad = encodeAAD({
+    expiry_hours: expiryHours,
+    max_downloads: maxDownloads,
+  });
+  const encrypted = await encrypt(plaintext, rawKey, aad);
   onProgress("File encrypted.", 50);
 
-  // Step 3: Encrypt filename (so server doesn't see it)
+  // Step 4: Encrypt filename (so server doesn't see it)
   const filenameBytes = new TextEncoder().encode(file.name);
   const filenameEnc = base64urlEncode(new Uint8Array(await encrypt(filenameBytes.buffer, rawKey)));
 
-  // Step 4: Hash password if provided (client-side, for server comparison)
-  let passwordHash: string | undefined;
+  // Step 5: Hash password with PBKDF2 if provided (600k iterations)
+  let passwordHashB64: string | undefined;
+  let passwordSaltB64: string | undefined;
   if (password && password.length > 0) {
-    const pwBytes = new TextEncoder().encode(password);
-    const hashBuf = await crypto.subtle.digest("SHA-256", pwBytes);
-    passwordHash = base64urlEncode(new Uint8Array(hashBuf));
+    onProgress("Hashing password...", 55);
+    const { hash, salt } = await hashPassword(password);
+    passwordHashB64 = base64urlEncode(hash);
+    passwordSaltB64 = base64urlEncode(salt);
   }
 
-  // Step 5: Upload
+  // Step 6: Upload
   onProgress("Uploading encrypted file...", 60);
   const formData = new FormData();
   formData.append("blob", new Blob([encrypted], { type: "application/octet-stream" }));
@@ -52,9 +62,11 @@ export async function uploadFile(opts: UploadOptions): Promise<UploadResult> {
     "meta",
     JSON.stringify({
       filename_enc: filenameEnc,
-      password_hash: passwordHash,
+      password_hash: passwordHashB64,
+      password_salt: passwordSaltB64,
       expiry_hours: expiryHours,
       max_downloads: maxDownloads,
+      content_hash: fileHash,
     }),
   );
 
@@ -71,12 +83,12 @@ export async function uploadFile(opts: UploadOptions): Promise<UploadResult> {
   onProgress("Upload complete.", 95);
   const { id } = (await res.json()) as { id: string };
 
-  // Step 6: Construct shareable URL
+  // Step 7: Construct shareable URL
   const keyStr = base64urlEncode(rawKey);
   const origin = window.location.origin;
   const url = `${origin}/d/${id}#${keyStr}`;
 
-  // Step 7: Wipe key from memory (best effort)
+  // Step 8: Wipe key from memory (best effort)
   wipe(rawKey);
 
   onProgress("Done.", 100);
